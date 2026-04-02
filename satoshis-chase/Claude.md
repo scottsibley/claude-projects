@@ -11,7 +11,8 @@ and live at shamory.com/satoshis-chase/
 ## Tech rules
 - Everything lives in index.html
 - Images and sounds go in the assets/ subfolder
-- No external libraries, no CDN links, no dependencies
+- Phaser 3 is permitted, loaded via CDN for arcade physics and sprites
+- No other external libraries beyond Phaser 3 
 - Must work by simply opening index.html in a browser
 - No iframes — this is a standalone hosted page
 

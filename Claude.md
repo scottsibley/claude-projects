@@ -18,7 +18,8 @@ Friendly, approachable, and fun. SHAmory customers are the audience.
 
 ## Technical defaults for all projects
 - Plain HTML, CSS, and JavaScript unless told otherwise
-- No heavy frameworks — keep things lightweight and fast
+- No heavy frameworks except where a project specifically requires one
+- satoshis-chase uses Phaser 3 for arcade game physics
 - All files must be deployable directly to SiteGround hosting
 - No WordPress plugins required for any project
 - No iframes — files are uploaded directly to the server
