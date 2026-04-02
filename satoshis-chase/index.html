@@ -165,20 +165,105 @@
           }
         }
 
-        // Player and ghosts: size to fit tile
-        this.player = this.add.sprite(this.pStart.x * TILE + TILE / 2, this.pStart.y * TILE + TILE / 2, 'satoshi');
+        // Player and ghosts: size to fit tile (use Image to avoid sprite-frame issues)
+        this.player = this.add.image(this.pStart.x * TILE + TILE / 2, this.pStart.y * TILE + TILE / 2, 'satoshi');
         this.player.setOrigin(0.5, 0.5);
         this.player.setDisplaySize(Math.round(TILE * 1.2), Math.round(TILE * 1.2));
+        // movement state
+        this.playerState = { x:this.player.x, y:this.player.y, dx:0, dy:0, ndx:0, ndy:0, speed: 2.2 };
+        this.cursors = this.input.keyboard.createCursorKeys();
 
         this.ghosts = [];
         for (const gs of this.ghostStarts) {
-          const g = this.add.sprite(gs.x * TILE + TILE / 2, gs.y * TILE + TILE / 2, 'enemy');
+          const g = this.add.image(gs.x * TILE + TILE / 2, gs.y * TILE + TILE / 2, 'enemy');
           g.setOrigin(0.5, 0.5);
           g.setDisplaySize(Math.round(TILE * 1.0), Math.round(TILE * 1.0));
           this.ghosts.push(g);
         }
 
         document.getElementById('ph-score').textContent='0'; document.getElementById('ph-level').textContent='1';
+      }
+
+      // Helper: get tile char at row/col (treat out-of-bounds as wall)
+      tileAt(tr,tc) {
+        if (tr<0||tr>=ROWS||tc<0||tc>=COLS) return 'W';
+        return this.grid[tr][tc];
+      }
+
+      snapGrid(coord) {
+        return Math.round((coord - TILE/2) / TILE) * TILE + TILE/2;
+      }
+
+      canMoveTo(px,py) {
+        const m = TILE * 0.36;
+        const corners = [[px-m,py-m],[px+m,py-m],[px-m,py+m],[px+m,py+m]];
+        for (const [cx,cy] of corners) {
+          const tc = Math.floor(cx / TILE), tr = Math.floor(cy / TILE);
+          if (this.tileAt(tr,tc) === 'W') return false;
+        }
+        return true;
+      }
+
+      tryMove(dx,dy) {
+        const spd = this.playerState.speed;
+        const SNAP = spd + 2.5;
+        if (dx!==0) {
+          const sy = this.snapGrid(this.player.y);
+          if (Math.abs(this.player.y - sy) <= SNAP) {
+            const nx = this.player.x + dx * spd;
+            if (this.canMoveTo(nx, sy)) { this.player.x = nx; this.player.y = sy; return true; }
+          }
+        }
+        if (dy!==0) {
+          const sx = this.snapGrid(this.player.x);
+          if (Math.abs(this.player.x - sx) <= SNAP) {
+            const ny = this.player.y + dy * spd;
+            if (this.canMoveTo(sx, ny)) { this.player.x = sx; this.player.y = ny; return true; }
+          }
+        }
+        return false;
+      }
+
+      update() {
+        if (!this.playerState) return;
+        // Read input
+        if (this.cursors.left.isDown) { this.playerState.ndx = -1; this.playerState.ndy = 0; }
+        else if (this.cursors.right.isDown) { this.playerState.ndx = 1; this.playerState.ndy = 0; }
+        else if (this.cursors.up.isDown) { this.playerState.ndx = 0; this.playerState.ndy = -1; }
+        else if (this.cursors.down.isDown) { this.playerState.ndx = 0; this.playerState.ndy = 1; }
+
+        let moved = false;
+        if (this.playerState.ndx !== 0 || this.playerState.ndy !== 0) {
+          moved = this.tryMove(this.playerState.ndx, this.playerState.ndy);
+          if (moved) { this.playerState.dx = this.playerState.ndx; this.playerState.dy = this.playerState.ndy; }
+        }
+        if (!moved) this.tryMove(this.playerState.dx, this.playerState.dy);
+
+        // Wrap tunnels horizontally
+        if (this.player.x < -TILE) this.player.x = W + TILE;
+        if (this.player.x > W + TILE) this.player.x = -TILE;
+
+        // After movement, check for coins at player's tile
+        this.collectCoinsAtPlayer();
+      }
+
+      collectCoinsAtPlayer() {
+        const tc = Math.floor(this.player.x / TILE);
+        const tr = Math.floor(this.player.y / TILE);
+        // find coins that match tile
+        const children = this.coins.getChildren ? this.coins.getChildren() : this.coins.getChildren();
+        for (let i = children.length - 1; i >= 0; i--) {
+          const coin = children[i];
+          const r = coin.getData('r'), c = coin.getData('c');
+          if (r === tr && c === tc) {
+            // remove coin
+            coin.destroy();
+            this.grid[tr][tc] = ' ';
+            // increment score
+            this.score = (this.score || 0) + (coin.getData('power') ? 50 : 10);
+            document.getElementById('ph-score').textContent = this.score;
+          }
+        }
       }
     }
 
