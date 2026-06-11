@@ -41,9 +41,6 @@
   <script>
     const TILE = 24, COLS = 21, ROWS = 20, W = 504, H = 480;
 
-    const SAT_W = 512, SAT_H = 512;
-    const ENE_W = 504, ENE_H = 524;
-
     const LEVELS = [
       [
         'WWWWWWWWWWWWWWWWWWWWW',
@@ -104,12 +101,15 @@
           bar.clear(); bar.fillStyle(0x00FDDC,1);
           bar.fillRect(32,h/2-8,(w-64)*p,16);
         });
-        this.load.spritesheet('satoshi', 'assets/satoshi.png', {
-          frameWidth: SAT_W, frameHeight: SAT_H
-        });
-        this.load.spritesheet('enemy', 'assets/enemy.png', {
-          frameWidth: ENE_W, frameHeight: ENE_H
-        });
+        this.load.image('satoshi_front', 'assets/satoshi_front.png');
+        this.load.image('satoshi_back',  'assets/satoshi_back.png');
+        this.load.image('satoshi_left',  'assets/satoshi_left.png');
+        this.load.image('satoshi_right', 'assets/satoshi_right.png');
+        this.load.image('enemy_front', 'assets/enemy_front.png');
+        this.load.image('enemy_back',  'assets/enemy_back.png');
+        this.load.image('enemy_left',  'assets/enemy_left.png');
+        this.load.image('enemy_right', 'assets/enemy_right.png');
+
         const g = this.make.graphics({x:0,y:0,add:false});
         g.fillStyle(0xFFBF00,1); g.fillCircle(12,12,8);
         g.fillStyle(0xFFE566,0.7); g.fillCircle(9,9,3);
@@ -173,10 +173,10 @@
           }
         }
 
-        this.player = this.add.sprite(
+        this.player = this.add.image(
           this.pStart.x * TILE + TILE/2,
           this.pStart.y * TILE + TILE/2,
-          'satoshi', 0
+          'satoshi_front'
         );
         this.player.setOrigin(0.5,0.5).setDisplaySize(TILE*1.1,TILE*1.1).setDepth(2);
         this.playerState = { dx:0, dy:0, ndx:0, ndy:0, speed:2.0 };
@@ -185,10 +185,10 @@
         this.ghosts = [];
         for (let i=0; i<this.ghostStarts.length; i++) {
           const gs = this.ghostStarts[i];
-          const g = this.add.sprite(
+          const g = this.add.image(
             gs.x * TILE + TILE/2,
             gs.y * TILE + TILE/2,
-            'enemy', 0
+            'enemy_front'
           );
           g.setOrigin(0.5,0.5).setDisplaySize(TILE,TILE).setDepth(2);
           g.setData('dx',1); g.setData('dy',0);
@@ -290,10 +290,18 @@
         const nx=ghost.x+dx*spd, ny=ghost.y+dy*spd;
         if(this.canMoveTo(nx,ny)){ ghost.x=nx; ghost.y=ny; }
         else { ghost.setData('dx',-dx); ghost.setData('dy',-dy); }
-        if(dx===1) ghost.setFrame(3);
-        else if(dx===-1) ghost.setFrame(2);
-        else if(dy===-1) ghost.setFrame(1);
-        else ghost.setFrame(0);
+
+        if(frightened){
+          ghost.setTexture('enemy_front');
+          ghost.setTint(0x4488FF);
+        } else {
+          if(dx===1)       ghost.setTexture('enemy_right');
+          else if(dx===-1) ghost.setTexture('enemy_left');
+          else if(dy===-1) ghost.setTexture('enemy_back');
+          else             ghost.setTexture('enemy_front');
+          ghost.clearTint();
+        }
+
         if(ghost.x<-TILE) ghost.x=W+TILE;
         if(ghost.x>W+TILE) ghost.x=-TILE;
       }
@@ -377,7 +385,7 @@
       activatePower(){
         this.powered=true;
         for(const g of this.ghosts){
-          if(!g.getData('eaten')){ g.setData('frightened',true); g.setTint(0x4488FF); }
+          if(!g.getData('eaten')){ g.setData('frightened',true); }
         }
         if(this.powerTimer) this.powerTimer.remove();
         this.powerTimer=this.time.delayedCall(8000,()=>{
@@ -413,18 +421,22 @@
         else if(this.cursors.right.isDown) { this.playerState.ndx=1;  this.playerState.ndy=0; }
         else if(this.cursors.up.isDown)    { this.playerState.ndx=0;  this.playerState.ndy=-1; }
         else if(this.cursors.down.isDown)  { this.playerState.ndx=0;  this.playerState.ndy=1; }
+
         let moved=false;
         if(this.playerState.ndx!==0||this.playerState.ndy!==0){
           moved=this.tryMove(this.playerState.ndx,this.playerState.ndy);
           if(moved){ this.playerState.dx=this.playerState.ndx; this.playerState.dy=this.playerState.ndy; }
         }
         if(!moved) this.tryMove(this.playerState.dx,this.playerState.dy);
-        if(this.playerState.dx===1)       this.player.setFrame(3);
-        else if(this.playerState.dx===-1) this.player.setFrame(2);
-        else if(this.playerState.dy===-1) this.player.setFrame(1);
-        else if(this.playerState.dy===1)  this.player.setFrame(0);
+
+        if(this.playerState.dx===1)       this.player.setTexture('satoshi_right');
+        else if(this.playerState.dx===-1) this.player.setTexture('satoshi_left');
+        else if(this.playerState.dy===-1) this.player.setTexture('satoshi_back');
+        else if(this.playerState.dy===1)  this.player.setTexture('satoshi_front');
+
         if(this.player.x<-TILE) this.player.x=W+TILE;
         if(this.player.x>W+TILE) this.player.x=-TILE;
+
         for(const ghost of this.ghosts){
           if(!ghost.getData('eaten')) this.moveGhost(ghost);
         }
