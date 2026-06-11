@@ -14,7 +14,6 @@
     #titleOverlay .box{text-align:center}
     #startBtn{padding:12px 32px;background:#FF6666;border:none;color:#fff;font-weight:900;font-size:18px;border-radius:6px;cursor:pointer;margin-top:16px;letter-spacing:1px}
     #startBtn:hover{background:#ff4444}
-    #livesDisplay{display:flex;gap:4px;align-items:center}
   </style>
 </head>
 <body>
@@ -42,14 +41,8 @@
   <script>
     const TILE = 24, COLS = 21, ROWS = 20, W = 504, H = 480;
 
-    // Sprite sheet frame indices (2x2 grid)
-    // Satoshi.png: 1024x1024 => each frame 512x512
-    // Layout: [0=Front/Down, 1=Back/Up, 2=Left, 3=Right]
     const SAT_W = 512, SAT_H = 512;
-    // Enemy.png: 1008x1048 => each frame 504x524
     const ENE_W = 504, ENE_H = 524;
-
-    const DIR_FRAME = { down:0, up:1, left:2, right:3 };
 
     const LEVELS = [
       [
@@ -111,22 +104,16 @@
           bar.clear(); bar.fillStyle(0x00FDDC,1);
           bar.fillRect(32,h/2-8,(w-64)*p,16);
         });
-
-        // Load sprite sheets with correct frame dimensions
         this.load.spritesheet('satoshi', 'assets/Satoshi.png', {
           frameWidth: SAT_W, frameHeight: SAT_H
         });
         this.load.spritesheet('enemy', 'assets/Enemy.png', {
           frameWidth: ENE_W, frameHeight: ENE_H
         });
-
-        // Generate coin texture
         const g = this.make.graphics({x:0,y:0,add:false});
         g.fillStyle(0xFFBF00,1); g.fillCircle(12,12,8);
         g.fillStyle(0xFFE566,0.7); g.fillCircle(9,9,3);
         g.generateTexture('coin',24,24); g.clear();
-
-        // Generate wall texture
         g.fillStyle(0x071a4a,1); g.fillRect(0,0,24,24);
         g.lineStyle(2,0x00FDDC,1); g.strokeRect(1,1,22,22);
         g.generateTexture('wall',24,24); g.destroy();
@@ -140,11 +127,10 @@
         const overlay = document.getElementById('titleOverlay');
         const startBtn = document.getElementById('startBtn');
         if (!startBtn) return;
-        const startGame = () => {
+        startBtn.onclick = () => {
           if (overlay) overlay.style.display = 'none';
           this.scene.start('GameScene');
         };
-        startBtn.onclick = startGame;
       }
     }
 
@@ -157,14 +143,12 @@
         this.grid = parsed.grid;
         this.pStart = parsed.pStart;
         this.ghostStarts = parsed.ghostStarts;
-        this.totalCoins = parsed.totalCoins;
         this.score = 0;
         this.lives = 3;
         this.powered = false;
         this.powerTimer = null;
         this.dead = false;
 
-        // Build maze
         this.walls = this.physics.add.staticGroup();
         this.coinGroup = this.add.group();
 
@@ -180,31 +164,25 @@
               const isPower = ch === 'O';
               const sz = isPower ? Math.round(TILE*0.85) : Math.round(TILE*0.45);
               const coin = this.add.image(x, y, 'coin');
-              coin.setDisplaySize(sz, sz).setOrigin(0.5,0.5).setDepth(1);
+              coin.setDisplaySize(sz,sz).setOrigin(0.5,0.5).setDepth(1);
               if (isPower) coin.setTint(0xFFDD44);
-              coin.setData('r', r); coin.setData('c', c);
-              coin.setData('power', isPower);
+              coin.setData('r',r); coin.setData('c',c);
+              coin.setData('power',isPower);
               this.coinGroup.add(coin);
             }
           }
         }
 
-        // Player sprite — start facing down (frame 0)
         this.player = this.add.sprite(
           this.pStart.x * TILE + TILE/2,
           this.pStart.y * TILE + TILE/2,
           'satoshi', 0
         );
-        this.player.setOrigin(0.5,0.5).setDisplaySize(TILE*1.1, TILE*1.1).setDepth(2);
-        this.playerDir = 'down';
-        this.playerState = {
-          dx:0, dy:0, ndx:0, ndy:0, speed:2.0
-        };
+        this.player.setOrigin(0.5,0.5).setDisplaySize(TILE*1.1,TILE*1.1).setDepth(2);
+        this.playerState = { dx:0, dy:0, ndx:0, ndy:0, speed:2.0 };
         this.cursors = this.input.keyboard.createCursorKeys();
 
-        // Ghosts
         this.ghosts = [];
-        const ghostColors = [0xFF6666, 0x00FDDC, 0x4488FF, 0xFF9900];
         for (let i=0; i<this.ghostStarts.length; i++) {
           const gs = this.ghostStarts[i];
           const g = this.add.sprite(
@@ -212,318 +190,261 @@
             gs.y * TILE + TILE/2,
             'enemy', 0
           );
-          g.setOrigin(0.5,0.5).setDisplaySize(TILE*1.0, TILE*1.0).setDepth(2);
-          g.setData('dx', 1); g.setData('dy', 0);
-          g.setData('speed', 1.2);
-          g.setData('frightened', false);
-          g.setData('moveTimer', 0);
-          g.setData('index', i);
+          g.setOrigin(0.5,0.5).setDisplaySize(TILE,TILE).setDepth(2);
+          g.setData('dx',1); g.setData('dy',0);
+          g.setData('speed',1.2);
+          g.setData('frightened',false);
+          g.setData('eaten',false);
+          g.setData('index',i);
           this.ghosts.push(g);
         }
 
-        // HUD
         document.getElementById('ph-score').textContent = '0';
         document.getElementById('ph-level').textContent = '1';
-        this.updateLivesDisplay();
+        document.getElementById('livesDisplay').textContent = '❤️❤️❤️';
       }
 
-      updateLivesDisplay() {
-        document.getElementById('livesDisplay').textContent = '❤️'.repeat(Math.max(0, this.lives));
+      updateLives(){
+        document.getElementById('livesDisplay').textContent = '❤️'.repeat(Math.max(0,this.lives));
       }
 
-      tileAt(tr,tc) {
-        if (tr<0||tr>=ROWS||tc<0||tc>=COLS) return 'W';
+      tileAt(tr,tc){
+        if(tr<0||tr>=ROWS||tc<0||tc>=COLS) return 'W';
         return this.grid[tr][tc];
       }
 
-      snapGrid(coord) {
-        return Math.round((coord - TILE/2) / TILE) * TILE + TILE/2;
+      snapGrid(coord){
+        return Math.round((coord-TILE/2)/TILE)*TILE+TILE/2;
       }
 
-      canMoveTo(px,py) {
-        const m = TILE * 0.38;
-        const corners = [[px-m,py-m],[px+m,py-m],[px-m,py+m],[px+m,py+m]];
-        for (const [cx,cy] of corners) {
-          const tc = Math.floor(cx/TILE), tr = Math.floor(cy/TILE);
-          if (this.tileAt(tr,tc) === 'W') return false;
+      canMoveTo(px,py){
+        const m=TILE*0.38;
+        const corners=[[px-m,py-m],[px+m,py-m],[px-m,py+m],[px+m,py+m]];
+        for(const [cx,cy] of corners){
+          const tc=Math.floor(cx/TILE), tr=Math.floor(cy/TILE);
+          if(this.tileAt(tr,tc)==='W') return false;
         }
         return true;
       }
 
-      tryMove(dx,dy) {
-        const spd = this.playerState.speed;
-        const SNAP = spd + 2;
-        if (dx !== 0) {
-          const sy = this.snapGrid(this.player.y);
-          if (Math.abs(this.player.y - sy) <= SNAP) {
-            const nx = this.player.x + dx * spd;
-            if (this.canMoveTo(nx, sy)) {
-              this.player.x = nx; this.player.y = sy; return true;
-            }
+      tryMove(dx,dy){
+        const spd=this.playerState.speed;
+        const SNAP=spd+2;
+        if(dx!==0){
+          const sy=this.snapGrid(this.player.y);
+          if(Math.abs(this.player.y-sy)<=SNAP){
+            const nx=this.player.x+dx*spd;
+            if(this.canMoveTo(nx,sy)){ this.player.x=nx; this.player.y=sy; return true; }
           }
         }
-        if (dy !== 0) {
-          const sx = this.snapGrid(this.player.x);
-          if (Math.abs(this.player.x - sx) <= SNAP) {
-            const ny = this.player.y + dy * spd;
-            if (this.canMoveTo(sx, ny)) {
-              this.player.x = sx; this.player.y = ny; return true;
-            }
+        if(dy!==0){
+          const sx=this.snapGrid(this.player.x);
+          if(Math.abs(this.player.x-sx)<=SNAP){
+            const ny=this.player.y+dy*spd;
+            if(this.canMoveTo(sx,ny)){ this.player.x=sx; this.player.y=ny; return true; }
           }
         }
         return false;
       }
 
-      // Ghost pathfinding: pick best open direction toward target
-      moveGhost(ghost) {
-        const spd = ghost.getData('speed');
-        const frightened = ghost.getData('frightened');
-        const idx = ghost.getData('index');
-
-        // Determine target tile
+      moveGhost(ghost){
+        const spd=ghost.getData('speed');
+        const frightened=ghost.getData('frightened');
+        const idx=ghost.getData('index');
+        const pc=Math.floor(this.player.x/TILE);
+        const pr=Math.floor(this.player.y/TILE);
         let targetC, targetR;
-        if (frightened) {
-          // Run away — target opposite corner
-          targetC = idx < 2 ? COLS-1 : 0;
-          targetR = idx % 2 === 0 ? ROWS-1 : 0;
+        if(frightened){
+          targetC = idx<2 ? COLS-1 : 0;
+          targetR = idx%2===0 ? ROWS-1 : 0;
         } else {
-          // Each ghost has slightly different targeting
-          const pc = Math.floor(this.player.x / TILE);
-          const pr = Math.floor(this.player.y / TILE);
-          if (idx === 0) { targetC = pc; targetR = pr; } // direct chase
-          else if (idx === 1) { targetC = pc + this.playerState.dx*4; targetR = pr + this.playerState.dy*4; } // ambush
-          else { targetC = pc; targetR = pr; } // default chase
+          if(idx===0){ targetC=pc; targetR=pr; }
+          else if(idx===1){ targetC=pc+this.playerState.dx*4; targetR=pr+this.playerState.dy*4; }
+          else { targetC=pc; targetR=pr; }
         }
-
-        const gc = Math.floor(ghost.x / TILE);
-        const gr = Math.floor(ghost.y / TILE);
-
-        // Move ghost pixel by pixel, snapping at tile centers to choose direction
-        const sx = this.snapGrid(ghost.x);
-        const sy = this.snapGrid(ghost.y);
-        const atCenter = Math.abs(ghost.x - sx) < spd+1 && Math.abs(ghost.y - sy) < spd+1;
-
-        if (atCenter) {
-          ghost.x = sx; ghost.y = sy;
-          // Choose best direction
-          const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
-          const curDx = ghost.getData('dx'), curDy = ghost.getData('dy');
-          // Shuffle slightly for variety, avoid reversing
-          const valid = dirs.filter(d => {
-            if (d.dx === -curDx && d.dy === -curDy) return false; // no reverse
-            const nc = gc + d.dx, nr = gr + d.dy;
-            return this.tileAt(nr, nc) !== 'W';
+        const gc=Math.floor(ghost.x/TILE);
+        const gr=Math.floor(ghost.y/TILE);
+        const sx=this.snapGrid(ghost.x);
+        const sy=this.snapGrid(ghost.y);
+        const atCenter=Math.abs(ghost.x-sx)<spd+1 && Math.abs(ghost.y-sy)<spd+1;
+        if(atCenter){
+          ghost.x=sx; ghost.y=sy;
+          const dirs=[{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+          const curDx=ghost.getData('dx'), curDy=ghost.getData('dy');
+          const valid=dirs.filter(d=>{
+            if(d.dx===-curDx && d.dy===-curDy) return false;
+            return this.tileAt(gr+d.dy, gc+d.dx)!=='W';
           });
-          if (valid.length > 0) {
-            // Pick direction closest to target
-            valid.sort((a,b) => {
-              const da = Math.abs((gc+a.dx)-targetC) + Math.abs((gr+a.dy)-targetR);
-              const db = Math.abs((gc+b.dx)-targetC) + Math.abs((gr+b.dy)-targetR);
-              return frightened ? db - da : da - db;
+          if(valid.length>0){
+            valid.sort((a,b)=>{
+              const da=Math.abs((gc+a.dx)-targetC)+Math.abs((gr+a.dy)-targetR);
+              const db=Math.abs((gc+b.dx)-targetC)+Math.abs((gr+b.dy)-targetR);
+              return frightened ? db-da : da-db;
             });
-            // Add small randomness for non-red ghosts
-            const pick = (idx > 0 && !frightened && Math.random() < 0.2)
-              ? valid[Math.floor(Math.random()*valid.length)]
-              : valid[0];
-            ghost.setData('dx', pick.dx); ghost.setData('dy', pick.dy);
+            const pick=(idx>0 && !frightened && Math.random()<0.2)
+              ? valid[Math.floor(Math.random()*valid.length)] : valid[0];
+            ghost.setData('dx',pick.dx); ghost.setData('dy',pick.dy);
           }
         }
-
-        const dx = ghost.getData('dx'), dy = ghost.getData('dy');
-        const nx = ghost.x + dx*spd, ny = ghost.y + dy*spd;
-        if (this.canMoveTo(nx, ny)) {
-          ghost.x = nx; ghost.y = ny;
-        } else {
-          // Blocked mid-path — try to reverse
-          ghost.setData('dx', -dx); ghost.setData('dy', -dy);
-        }
-
-        // Set sprite frame by direction
-        if (dx === 1) ghost.setFrame(3);
-        else if (dx === -1) ghost.setFrame(2);
-        else if (dy === -1) ghost.setFrame(1);
+        const dx=ghost.getData('dx'), dy=ghost.getData('dy');
+        const nx=ghost.x+dx*spd, ny=ghost.y+dy*spd;
+        if(this.canMoveTo(nx,ny)){ ghost.x=nx; ghost.y=ny; }
+        else { ghost.setData('dx',-dx); ghost.setData('dy',-dy); }
+        if(dx===1) ghost.setFrame(3);
+        else if(dx===-1) ghost.setFrame(2);
+        else if(dy===-1) ghost.setFrame(1);
         else ghost.setFrame(0);
-
-        // Tunnel wrap
-        if (ghost.x < -TILE) ghost.x = W + TILE;
-        if (ghost.x > W + TILE) ghost.x = -TILE;
+        if(ghost.x<-TILE) ghost.x=W+TILE;
+        if(ghost.x>W+TILE) ghost.x=-TILE;
       }
 
-      checkGhostCollision() {
-        if (this.dead) return;
-        for (const ghost of this.ghosts) {
-          const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, ghost.x, ghost.y);
-          if (dist < TILE * 0.9) {
-            if (ghost.getData('frightened')) {
-              // Eat ghost
+      checkGhostCollision(){
+        if(this.dead) return;
+        for(const ghost of this.ghosts){
+          if(ghost.getData('eaten')) continue;
+          const dist=Phaser.Math.Distance.Between(this.player.x,this.player.y,ghost.x,ghost.y);
+          if(dist<TILE*0.9){
+            if(ghost.getData('frightened')){
               ghost.setVisible(false);
-              ghost.setData('eaten', true);
-              this.score += 200;
-              document.getElementById('ph-score').textContent = this.score;
-              // Respawn ghost after 3 sec
-              this.time.delayedCall(3000, () => {
-                const gs = this.ghostStarts[this.ghosts.indexOf(ghost)];
-                if (gs) { ghost.x = gs.x*TILE+TILE/2; ghost.y = gs.y*TILE+TILE/2; }
+              ghost.setData('eaten',true);
+              this.score+=200;
+              document.getElementById('ph-score').textContent=this.score;
+              this.time.delayedCall(3000,()=>{
+                const gs=this.ghostStarts[this.ghosts.indexOf(ghost)];
+                if(gs){ ghost.x=gs.x*TILE+TILE/2; ghost.y=gs.y*TILE+TILE/2; }
                 ghost.setVisible(true);
-                ghost.setData('frightened', false);
-                ghost.setData('eaten', false);
+                ghost.setData('frightened',false);
+                ghost.setData('eaten',false);
                 ghost.clearTint();
               });
             } else {
-              // Player dies
               this.playerDie();
             }
           }
         }
       }
 
-      playerDie() {
-        if (this.dead) return;
-        this.dead = true;
+      playerDie(){
+        if(this.dead) return;
+        this.dead=true;
         this.lives--;
-        this.updateLivesDisplay();
-        // Flash player red
+        this.updateLives();
         this.tweens.add({
-          targets: this.player, alpha: 0, duration: 150,
-          yoyo: true, repeat: 3,
-          onComplete: () => {
+          targets:this.player, alpha:0, duration:150,
+          yoyo:true, repeat:3,
+          onComplete:()=>{
             this.player.setAlpha(1);
-            if (this.lives <= 0) {
+            if(this.lives<=0){
               this.showGameOver();
             } else {
-              // Reset positions
-              this.player.x = this.pStart.x * TILE + TILE/2;
-              this.player.y = this.pStart.y * TILE + TILE/2;
-              this.playerState.dx = 0; this.playerState.dy = 0;
-              this.playerState.ndx = 0; this.playerState.ndy = 0;
-              for (let i=0; i<this.ghosts.length; i++) {
-                const gs = this.ghostStarts[i];
-                if (gs) { this.ghosts[i].x = gs.x*TILE+TILE/2; this.ghosts[i].y = gs.y*TILE+TILE/2; }
-                this.ghosts[i].setData('frightened', false);
+              this.player.x=this.pStart.x*TILE+TILE/2;
+              this.player.y=this.pStart.y*TILE+TILE/2;
+              this.playerState.dx=0; this.playerState.dy=0;
+              this.playerState.ndx=0; this.playerState.ndy=0;
+              for(let i=0;i<this.ghosts.length;i++){
+                const gs=this.ghostStarts[i];
+                if(gs){ this.ghosts[i].x=gs.x*TILE+TILE/2; this.ghosts[i].y=gs.y*TILE+TILE/2; }
+                this.ghosts[i].setData('frightened',false);
                 this.ghosts[i].clearTint();
                 this.ghosts[i].setVisible(true);
+                this.ghosts[i].setData('eaten',false);
               }
-              if (this.powered) { this.powered = false; if(this.powerTimer) this.powerTimer.remove(); }
-              this.dead = false;
+              if(this.powered){ this.powered=false; if(this.powerTimer) this.powerTimer.remove(); }
+              this.dead=false;
             }
           }
         });
       }
 
-      showGameOver() {
-        const el = document.createElement('div');
-        el.style.cssText = 'position:absolute;top:0;left:0;width:504px;height:480px;background:rgba(10,36,99,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;border-radius:0 0 12px 12px';
-        el.innerHTML = `<h2 style="color:#FF6666;font-size:36px;margin:0">GAME OVER</h2>
-          <p style="color:#FFBF00;font-size:18px">Final Hashrate: ${this.score}</p>
+      showGameOver(){
+        const el=document.createElement('div');
+        el.style.cssText='position:absolute;top:0;left:0;width:504px;height:480px;background:rgba(10,36,99,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;border-radius:0 0 12px 12px';
+        el.innerHTML=`<h2 style="color:#FF6666;font-size:36px;margin:0 0 8px">GAME OVER</h2>
+          <p style="color:#FFBF00;font-size:18px;margin:0 0 16px">Final Hashrate: ${this.score}</p>
           <button onclick="location.reload()" style="padding:10px 28px;background:#FF6666;border:none;color:#fff;font-weight:900;border-radius:6px;cursor:pointer;font-size:16px">PLAY AGAIN</button>`;
         document.getElementById('game-wrap').appendChild(el);
       }
 
-      showWin() {
-        const el = document.createElement('div');
-        el.style.cssText = 'position:absolute;top:0;left:0;width:504px;height:480px;background:rgba(10,36,99,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;border-radius:0 0 12px 12px';
-        el.innerHTML = `<h2 style="color:#FFBF00;font-size:30px;margin:0">⛏️ GENESIS BLOCK MINED!</h2>
-          <p style="color:#00FDDC;font-size:18px">Hashrate: ${this.score}</p>
+      showWin(){
+        const el=document.createElement('div');
+        el.style.cssText='position:absolute;top:0;left:0;width:504px;height:480px;background:rgba(10,36,99,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;border-radius:0 0 12px 12px';
+        el.innerHTML=`<h2 style="color:#FFBF00;font-size:30px;margin:0 0 8px">⛏️ GENESIS BLOCK MINED!</h2>
+          <p style="color:#00FDDC;font-size:18px;margin:0 0 16px">Hashrate: ${this.score}</p>
           <button onclick="location.reload()" style="padding:10px 28px;background:#FFBF00;border:none;color:#0A2463;font-weight:900;border-radius:6px;cursor:pointer;font-size:16px">PLAY AGAIN</button>`;
         document.getElementById('game-wrap').appendChild(el);
       }
 
-      collectCoins() {
-        const tc = Math.floor(this.player.x / TILE);
-        const tr = Math.floor(this.player.y / TILE);
-        const children = this.coinGroup.getChildren();
-        for (let i = children.length-1; i >= 0; i--) {
-          const coin = children[i];
-          if (coin.getData('r') === tr && coin.getData('c') === tc) {
-            const isPower = coin.getData('power');
+      activatePower(){
+        this.powered=true;
+        for(const g of this.ghosts){
+          if(!g.getData('eaten')){ g.setData('frightened',true); g.setTint(0x4488FF); }
+        }
+        if(this.powerTimer) this.powerTimer.remove();
+        this.powerTimer=this.time.delayedCall(8000,()=>{
+          this.powered=false;
+          for(const g of this.ghosts){ g.setData('frightened',false); g.clearTint(); }
+        });
+      }
+
+      collectCoins(){
+        const tc=Math.floor(this.player.x/TILE);
+        const tr=Math.floor(this.player.y/TILE);
+        const children=this.coinGroup.getChildren();
+        for(let i=children.length-1;i>=0;i--){
+          const coin=children[i];
+          if(coin.getData('r')===tr && coin.getData('c')===tc){
+            const isPower=coin.getData('power');
             coin.destroy();
-            this.grid[tr][tc] = ' ';
-            this.score += isPower ? 50 : 10;
-            document.getElementById('ph-score').textContent = this.score;
-            if (isPower) this.activatePower();
-            // Check win
-            if (this.coinGroup.getChildren().length === 0) {
-              this.dead = true;
-              this.time.delayedCall(500, () => this.showWin());
+            this.grid[tr][tc]=' ';
+            this.score+=isPower?50:10;
+            document.getElementById('ph-score').textContent=this.score;
+            if(isPower) this.activatePower();
+            if(this.coinGroup.getChildren().length===0){
+              this.dead=true;
+              this.time.delayedCall(500,()=>this.showWin());
             }
           }
         }
       }
 
-      activatePower() {
-        this.powered = true;
-        for (const g of this.ghosts) {
-          if (!g.getData('eaten')) {
-            g.setData('frightened', true);
-            g.setTint(0x4488FF);
-          }
+      update(){
+        if(this.dead) return;
+        if(this.cursors.left.isDown)       { this.playerState.ndx=-1; this.playerState.ndy=0; }
+        else if(this.cursors.right.isDown) { this.playerState.ndx=1;  this.playerState.ndy=0; }
+        else if(this.cursors.up.isDown)    { this.playerState.ndx=0;  this.playerState.ndy=-1; }
+        else if(this.cursors.down.isDown)  { this.playerState.ndx=0;  this.playerState.ndy=1; }
+        let moved=false;
+        if(this.playerState.ndx!==0||this.playerState.ndy!==0){
+          moved=this.tryMove(this.playerState.ndx,this.playerState.ndy);
+          if(moved){ this.playerState.dx=this.playerState.ndx; this.playerState.dy=this.playerState.ndy; }
         }
-        if (this.powerTimer) this.powerTimer.remove();
-        this.powerTimer = this.time.delayedCall(8000, () => {
-          this.powered = false;
-          for (const g of this.ghosts) {
-            g.setData('frightened', false);
-            g.clearTint();
-          }
-        });
-      }
-
-      update() {
-        if (this.dead) return;
-
-        // Input
-        if (this.cursors.left.isDown)       { this.playerState.ndx=-1; this.playerState.ndy=0; }
-        else if (this.cursors.right.isDown) { this.playerState.ndx=1;  this.playerState.ndy=0; }
-        else if (this.cursors.up.isDown)    { this.playerState.ndx=0;  this.playerState.ndy=-1; }
-        else if (this.cursors.down.isDown)  { this.playerState.ndx=0;  this.playerState.ndy=1; }
-
-        // Try queued direction first, then current
-        let moved = false;
-        if (this.playerState.ndx !== 0 || this.playerState.ndy !== 0) {
-          moved = this.tryMove(this.playerState.ndx, this.playerState.ndy);
-          if (moved) {
-            this.playerState.dx = this.playerState.ndx;
-            this.playerState.dy = this.playerState.ndy;
-          }
+        if(!moved) this.tryMove(this.playerState.dx,this.playerState.dy);
+        if(this.playerState.dx===1)       this.player.setFrame(3);
+        else if(this.playerState.dx===-1) this.player.setFrame(2);
+        else if(this.playerState.dy===-1) this.player.setFrame(1);
+        else if(this.playerState.dy===1)  this.player.setFrame(0);
+        if(this.player.x<-TILE) this.player.x=W+TILE;
+        if(this.player.x>W+TILE) this.player.x=-TILE;
+        for(const ghost of this.ghosts){
+          if(!ghost.getData('eaten')) this.moveGhost(ghost);
         }
-        if (!moved) this.tryMove(this.playerState.dx, this.playerState.dy);
-
-        // Update player facing direction
-        if (this.playerState.dx === 1)       { this.playerDir='right'; this.player.setFrame(3); }
-        else if (this.playerState.dx === -1) { this.playerDir='left';  this.player.setFrame(2); }
-        else if (this.playerState.dy === -1) { this.playerDir='up';    this.player.setFrame(1); }
-        else if (this.playerState.dy === 1)  { this.playerDir='down';  this.player.setFrame(0); }
-
-        // Tunnel wrap
-        if (this.player.x < -TILE) this.player.x = W + TILE;
-        if (this.player.x > W + TILE) this.player.x = -TILE;
-
-        // Move ghosts
-        for (const ghost of this.ghosts) {
-          if (!ghost.getData('eaten')) this.moveGhost(ghost);
-        }
-
         this.collectCoins();
         this.checkGhostCollision();
       }
     }
 
-    if (typeof Phaser === 'undefined') {
-      console.error('Phaser not loaded');
-    } else {
-      const config = {
-        type: Phaser.AUTO,
-        width: W, height: H,
-        parent: 'phaser-game',
-        backgroundColor: '#040e2a',
-        physics: { default: 'arcade', arcade: { debug: false } },
-        scene: [BootScene, PreloadScene, TitleScene, GameScene],
-        scale: { mode: Phaser.Scale.NONE }
-      };
-      window.game = new Phaser.Game(config);
-    }
+    const config = {
+      type: Phaser.AUTO,
+      width: W, height: H,
+      parent: 'phaser-game',
+      backgroundColor: '#040e2a',
+      physics: { default:'arcade', arcade:{ debug:false } },
+      scene: [BootScene, PreloadScene, TitleScene, GameScene],
+      scale: { mode: Phaser.Scale.NONE }
+    };
+    window.game = new Phaser.Game(config);
 
-    document.getElementById('ph-mute').addEventListener('click', () => {
+    document.getElementById('ph-mute').addEventListener('click',()=>{
       console.log('mute — audio coming soon');
     });
   </script>
